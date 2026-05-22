@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5分鐘單次倒數 v1.0</title>
+
+<style>
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#020617;
+  font-family:Arial, Helvetica, sans-serif;
+}
+
+body{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  position:relative;
+  color:white;
+  transition:background 0.5s;
+}
+
+.background{
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(circle at top left, rgba(59,130,246,0.25), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(168,85,247,0.25), transparent 40%),
+    linear-gradient(135deg,#020617,#0f172a,#111827);
+}
+
+.container{
+  position:relative;
+  z-index:2;
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  transition:left 20s linear, top 20s linear;
+}
+
+.timer{
+  width:100%;
+  text-align:center;
+  font-size:min(60vw,60vh);
+  font-weight:900;
+  line-height:0.82;
+  letter-spacing:-0.08em;
+  user-select:none;
+
+  text-shadow:
+    0 0 30px rgba(255,255,255,0.2),
+    0 0 120px rgba(59,130,246,0.5);
+}
+
+.finished{
+  color:#ff3b3b !important;
+
+  text-shadow:
+    0 0 20px rgba(255,0,0,0.4),
+    0 0 80px rgba(255,0,0,0.8);
+}
+
+.controls{
+  position:absolute;
+  bottom:24px;
+  width:100%;
+  display:flex;
+  justify-content:center;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:0 20px;
+}
+
+button{
+  border:none;
+  padding:16px 28px;
+  border-radius:18px;
+  background:#2563eb;
+  color:white;
+  font-size:20px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.box{
+  background:rgba(255,255,255,0.08);
+  padding:14px 20px;
+  border-radius:18px;
+}
+
+input[type="range"]{
+  width:220px;
+}
+
+@media(max-width:700px){
+
+  .timer{
+    font-size:min(75vw,75vh);
+  }
+
+  button{
+    width:100%;
+  }
+
+  .box{
+    width:100%;
+  }
+
+  input[type="range"]{
+    width:100%;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="background"></div>
+
+<div class="container" id="container">
+
+  <div class="timer" id="timer">
+    05:00
+  </div>
+
+  <div class="controls">
+
+    <button id="startBtn">
+      開始倒數
+    </button>
+
+    <div class="box">
+      <input
+        type="file"
+        id="musicInput"
+        accept=".mp3,.mp4,audio/*,video/*"
+      >
+    </div>
+
+    <div class="box">
+      🔊 音量
+      <input
+        type="range"
+        id="volumeSlider"
+        min="0"
+        max="100"
+        value="40"
+      >
+    </div>
+
+    <div class="box">
+      OLED 防烙印
+      <input
+        type="checkbox"
+        id="oledToggle"
+        checked
+      >
+    </div>
+
+  </div>
+
+</div>
+
+<audio id="bgm" loop></audio>
+
+<script>
+const TOTAL_SECONDS = 300;
+
+const timerElement = document.getElementById('timer');
+const startBtn = document.getElementById('startBtn');
+const musicInput = document.getElementById('musicInput');
+const volumeSlider = document.getElementById('volumeSlider');
+const oledToggle = document.getElementById('oledToggle');
+const bgm = document.getElementById('bgm');
+const container = document.getElementById('container');
+
+let timeLeft = TOTAL_SECONDS;
+let timerStarted = false;
+let timerFinished = false;
+
+function updateDisplay(){
+
+  if(timerFinished){
+    timerElement.textContent = '時間到';
+    return;
+  }
+
+  const minutes = String(Math.floor(timeLeft / 60)).padStart(2,'0');
+  const seconds = String(timeLeft % 60).padStart(2,'0');
+
+  timerElement.textContent = `${minutes}:${seconds}`;
+}
+
+function flashRed(){
+
+  document.body.animate(
+    [
+      { background:'#020617' },
+      { background:'#7f1d1d' },
+      { background:'#020617' }
+    ],
+    {
+      duration:1200,
+      iterations:3
+    }
+  );
+}
+
+function playBell(){
+
+  const ctx = new(window.AudioContext || window.webkitAudioContext)();
+
+  for(let i=0;i<3;i++){
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.value = 880;
+
+    gain.gain.setValueAtTime(0.001, ctx.currentTime + i);
+    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + i + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i + 0.8);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(ctx.currentTime + i);
+    osc.stop(ctx.currentTime + i + 0.8);
+  }
+}
+
+function finishTimer(){
+
+  timerFinished = true;
+
+  timerElement.classList.add('finished');
+
+  updateDisplay();
+
+  flashRed();
+  playBell();
+
+  startBtn.textContent = '倒數已結束';
+}
+
+function tick(){
+
+  if(timerFinished){
+    return;
+  }
+
+  timeLeft--;
+
+  if(timeLeft <= 0){
+
+    finishTimer();
+    return;
+  }
+
+  updateDisplay();
+}
+
+function startTimer(){
+
+  if(timerStarted){
+    return;
+  }
+
+  timerStarted = true;
+
+  startBtn.textContent = '倒數中';
+
+  if(bgm.src){
+    bgm.play().catch(()=>{});
+  }
+
+  updateDisplay();
+
+  setInterval(tick,1000);
+}
+
+musicInput.addEventListener('change',(event)=>{
+
+  const file = event.target.files[0];
+
+  if(!file){
+    return;
+  }
+
+  const url = URL.createObjectURL(file);
+
+  bgm.src = url;
+  bgm.volume = volumeSlider.value / 100;
+});
+
+volumeSlider.addEventListener('input',()=>{
+
+  bgm.volume = volumeSlider.value / 100;
+});
+
+startBtn.addEventListener('click',startTimer);
+
+function moveForOLED(){
+
+  if(!oledToggle.checked){
+
+    container.style.left = '0px';
+    container.style.top = '0px';
+    return;
+  }
+
+  const x = Math.floor(Math.random() * 12) - 6;
+  const y = Math.floor(Math.random() * 12) - 6;
+
+  container.style.left = `${x}px`;
+  container.style.top = `${y}px`;
+}
+
+setInterval(moveForOLED,20000);
+
+updateDisplay();
+</script>
+
+</body>
+</html>
