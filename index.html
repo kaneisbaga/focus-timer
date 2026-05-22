@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus Timer v0.3.1</title>
+
+<style>
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#030712;
+  font-family:Arial, Helvetica, sans-serif;
+  color:white;
+}
+
+body{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  position:relative;
+}
+
+.background{
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(circle at top left, rgba(59,130,246,0.25), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(168,85,247,0.25), transparent 40%),
+    linear-gradient(135deg,#020617,#0f172a,#111827);
+}
+
+.container{
+  position:absolute;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+  transition:left 20s linear, top 20s linear;
+}
+
+.timer{
+  width:100%;
+  text-align:center;
+
+  /* 更大的極限字體 */
+  font-size:min(58vw,58vh);
+
+  font-weight:900;
+  line-height:0.82;
+  letter-spacing:-0.08em;
+
+  text-shadow:
+    0 0 30px rgba(255,255,255,0.2),
+    0 0 120px rgba(59,130,246,0.55);
+
+  user-select:none;
+}
+
+.round{
+  position:absolute;
+  top:28px;
+  right:32px;
+  font-size:min(4vw,42px);
+  font-weight:900;
+  padding:18px 28px;
+  border-radius:24px;
+  background:rgba(255,255,255,0.1);
+  border:2px solid rgba(255,255,255,0.15);
+  color:#93c5fd;
+}
+
+.controls{
+  position:absolute;
+  bottom:24px;
+  width:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:0 20px;
+}
+
+button{
+  border:none;
+  padding:16px 28px;
+  border-radius:18px;
+  background:#2563eb;
+  color:white;
+  font-size:20px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+input[type="range"]{
+  width:220px;
+}
+
+.box{
+  background:rgba(255,255,255,0.08);
+  padding:14px 20px;
+  border-radius:18px;
+}
+
+@media(max-width:700px){
+
+  .timer{
+    font-size:min(70vw,70vh);
+  }
+
+  button{
+    width:100%;
+  }
+
+  .box{
+    width:100%;
+  }
+
+  input[type="range"]{
+    width:100%;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="background"></div>
+
+<div class="container" id="container">
+
+  <div class="round" id="round">
+    第 1 次倒數
+  </div>
+
+  <div class="timer" id="timer">
+    05:00
+  </div>
+
+  <div class="controls">
+
+    <button id="startBtn">
+      開始倒數
+    </button>
+
+    <div class="box">
+      <input type="file" id="musicInput" accept=".mp3,.mp4,audio/*,video/*">
+    </div>
+
+    <div class="box">
+      🔊 音量
+      <input type="range" id="volumeSlider" min="0" max="100" value="40">
+    </div>
+
+    <div class="box">
+      OLED 防烙印
+      <input type="checkbox" id="oledToggle" checked>
+    </div>
+
+  </div>
+
+</div>
+
+<audio id="bgm" loop></audio>
+
+<script>
+const TOTAL_SECONDS = 300;
+
+const timerElement = document.getElementById('timer');
+const roundElement = document.getElementById('round');
+const startBtn = document.getElementById('startBtn');
+const musicInput = document.getElementById('musicInput');
+const volumeSlider = document.getElementById('volumeSlider');
+const oledToggle = document.getElementById('oledToggle');
+const bgm = document.getElementById('bgm');
+const container = document.getElementById('container');
+
+let timeLeft = TOTAL_SECONDS;
+let round = 1;
+let timerRunning = false;
+
+function updateDisplay(){
+  const minutes = String(Math.floor(timeLeft / 60)).padStart(2,'0');
+  const seconds = String(timeLeft % 60).padStart(2,'0');
+
+  timerElement.textContent = `${minutes}:${seconds}`;
+  roundElement.textContent = `第 ${round} 次倒數`;
+}
+
+function tick(){
+
+  timeLeft--;
+
+  if(timeLeft < 0){
+
+    round++;
+    timeLeft = TOTAL_SECONDS;
+
+    flashScreen();
+    playBell();
+  }
+
+  updateDisplay();
+}
+
+function flashScreen(){
+
+  document.body.animate(
+    [
+      {filter:'brightness(1)'},
+      {filter:'brightness(1.8)'},
+      {filter:'brightness(1)'}
+    ],
+    {
+      duration:1200
+    }
+  );
+}
+
+function playBell(){
+
+  const ctx = new(window.AudioContext || window.webkitAudioContext)();
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'triangle';
+  osc.frequency.value = 880;
+
+  gain.gain.setValueAtTime(0.001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start();
+  osc.stop(ctx.currentTime + 1);
+}
+
+function startTimer(){
+
+  if(timerRunning){
+    return;
+  }
+
+  timerRunning = true;
+
+  setInterval(tick,1000);
+
+  startBtn.textContent = '倒數進行中';
+
+  if(bgm.src){
+    bgm.play().catch(()=>{});
+  }
+}
+
+musicInput.addEventListener('change',(event)=>{
+
+  const file = event.target.files[0];
+
+  if(!file){
+    return;
+  }
+
+  const url = URL.createObjectURL(file);
+
+  bgm.src = url;
+  bgm.volume = volumeSlider.value / 100;
+
+  if(timerRunning){
+    bgm.play().catch(()=>{});
+  }
+});
+
+volumeSlider.addEventListener('input',()=>{
+
+  bgm.volume = volumeSlider.value / 100;
+});
+
+startBtn.addEventListener('click',startTimer);
+
+function moveForOLED(){
+
+  if(!oledToggle.checked){
+
+    container.style.left = '0px';
+    container.style.top = '0px';
+    return;
+  }
+
+  const x = Math.floor(Math.random() * 12) - 6;
+  const y = Math.floor(Math.random() * 12) - 6;
+
+  container.style.left = `${x}px`;
+  container.style.top = `${y}px`;
+}
+
+setInterval(moveForOLED,20000);
+
+updateDisplay();
+</script>
+
+</body>
+</html>
